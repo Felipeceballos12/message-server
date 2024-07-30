@@ -16,30 +16,91 @@ app.use('/', (req, res) => {
 }); */
 let users = [];
 let groupChat = [];
-let privateChat = [];
+const privateChat = {
+  conversations: {},
+
+  addMessage: function (sender, recipient, message) {
+    const conversationId = this.getConversationId(
+      sender.username,
+      recipient
+    );
+
+    if (!this.conversations[conversationId]) {
+      this.conversations[conversationId] = {
+        participants: [sender.username, recipient],
+        messages: [],
+      };
+    }
+
+    this.conversations[conversationId].messages.push({
+      senderId: sender.id,
+      sender: sender.username,
+      content: message,
+      timestamp: new Date(),
+    });
+  },
+
+  getConversationId: function (user1, user2) {
+    return [user1, user2].sort().join('_');
+  },
+
+  getConversation: function (user1, user2) {
+    const conversationId = this.getConversationId(user1, user2);
+    return this.conversations[conversationId] || null;
+  },
+
+  getAllConversations: function (user) {
+    return Object.values(this.conversations).filter((conv) =>
+      conv.participants.includes(user)
+    );
+  },
+};
 
 app.use(express.static(join(_dirname, 'client')));
+app.set('view engine', 'ejs');
+
+app.get('/privateGroup/:groupName', (req, res) => {
+  const groupId = crypto.randomUUID();
+  const groupName = req.params.groupName;
+
+  res.redirect(`/privateGroup/${groupName}/${groupId}`);
+});
+
+app.get('/privateGroup/:groupName/:groupId', (req, res) => {
+  const groupId = req.params.groupId;
+  const groupName = req.params.groupName;
+
+  res.render(join(_dirname, 'views/group'), {
+    groupId,
+    groupName,
+  });
+});
 
 io.on('connection', (socket) => {
   socket.on('user connected', (user) => {
+    socket.username = user;
+
     users.push({
       username: user,
       id: socket.id,
     });
 
+    let newUser = {
+      username: user,
+      id: socket.id,
+    };
+
     console.log({ users });
-    socket.username = user;
-    io.emit('user connected', users);
+    io.emit('user connected', { newUser, users });
   });
 
   socket.on('disconnect', () => {
-    socket.broadcast.emit('user disconnected', socket.username);
-    let currentUsers = users.filter(
-      (usr) => usr.user !== socket.username
-    );
+    console.log('user disconnected ', socket.username);
 
+    let currentUsers = users.filter((usr) => usr.id !== socket.id);
     users = currentUsers;
-    console.log('user disconnected');
+
+    socket.broadcast.emit('user disconnected', socket.username);
   });
 
   socket.on('user typing', (user) => {
@@ -50,24 +111,59 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('user not typing', user);
   });
 
-  socket.on('group message', (data) => {
+  socket.on('listening messages', (data) => {
     if (data.chatType === 'group') {
       groupChat.push({
-        username: data.username,
-        messsage: data.message,
+        senderId: data.senderId,
+        sender: data.sender,
+        content: data.content,
       });
     } else {
-      privateChat.push({
-        username: data.username,
-        messsage: data.message,
-      });
+      privateChat.addMessage(
+        { username: data.sender, id: data.senderId },
+        data.chatWith,
+        data.content
+      );
     }
 
-    io.emit('group messages', {
-      id: socket.id,
-      message: data.message,
-      username: socket.username,
+    io.emit('listening messages', {
+      senderId: socket.id,
+      content: data.content,
+      sender: socket.username,
+      activedChat: data.chatWith,
     });
+  });
+
+  socket.on('get messages', (data) => {
+    if (data.recipient !== 'Group Messages') {
+      let privateMessages = privateChat.getConversation(
+        data.sender,
+        data.recipient
+      );
+
+      if (privateMessages !== null) {
+        console.log('Messages: ', privateMessages);
+        io.emit('get messages', privateMessages.messages);
+      }
+    } else {
+      io.emit('get messages', groupChat);
+    }
+  });
+});
+
+const groupNameSpace = io.of('/privateGroup');
+let privateGroupChat = {};
+
+groupNameSpace.on('connection', (socket) => {
+  console.log('Group Private');
+  socket.on('user connected', (user) => {
+    if (!privateGroupChat[socket.id]) {
+      privateGroupChat[socket.id] = [user];
+    } else {
+      privateGroupChat[socket.id].push(user);
+    }
+
+    console.log(privateGroupChat);
   });
 });
 

@@ -41,6 +41,24 @@ body {
   overflow: hidden;
 }
 
+.chatInfoHeader {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
+  height: 56px;
+  padding: 0px 16px 2px 16px;
+  border-bottom: 2px solid #f8f9fa;
+}
+
+.createGroupButton {
+  border: none;
+  padding: 8px;
+  background-color: transparent;
+  cursor: pointer;
+}
+
 .headerMessage {
   display: flex;
   flex-direction: row;
@@ -119,6 +137,7 @@ h6 {
   align-items: center;
   border: none;
   cursor: pointer;
+  background-color: transparent;
 }
 
 ul {
@@ -162,14 +181,10 @@ li {
   padding: 8px 16px;
 }
 
-.chats h6 {
+/* .chats h6 {
   display: flex;
   align-items: end;
-  padding-bottom: 16px;
-  padding-left: 16px;
-  height: 56px;
-  border-bottom: 2px solid #f8f9fa;
-}
+} */
 
 .chatsContainer {
   display: flex;
@@ -180,6 +195,7 @@ li {
 .userConnectedContainer {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
   margin-top: 16px;
   border: none;
@@ -191,6 +207,10 @@ li {
 
 .userConnectedContainer:hover {
   background-color: #f8f9fa;
+}
+
+.userConnectedContainerActive {
+  background-color: #e4e8ec;
 }
 
 .userConnectedStatus {

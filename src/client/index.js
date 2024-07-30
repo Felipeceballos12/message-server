@@ -7,6 +7,9 @@ const userProfileMessage = document.querySelector(
   '.userProfileMessage'
 );
 const userNameMessage = document.querySelector('.userNameMessage');
+const createGroupButton = document.querySelector(
+  '.createGroupButton'
+);
 
 const usersTalkingPrivalety = {};
 
@@ -18,8 +21,23 @@ socket.on('connect', () => {
 // Get Username
 socket.username = prompt('¿What is your name?', '');
 
-// Send username to the server
-socket.emit('user connected', socket.username);
+if (socket.username !== null) {
+  // Send username to the server
+  socket.emit('user connected', socket.username);
+}
+
+// Listening when the user is clicked on the create group
+createGroupButton.addEventListener('click', () => {
+  console.log('Group Button');
+  const groupName = prompt('What is the name of the group');
+
+  if (groupName !== null) {
+    // new namespace
+    const url = `/privateGroup/${groupName}`;
+    window.open(url, '_blank');
+  }
+});
+
 // Listening when the user is typing to send to the server
 messagesInput.addEventListener('input', (e) => {
   socket.emit('user typing', socket.username);
@@ -47,58 +65,59 @@ socket.on('user not typing', (user) => {
 });
 
 // Get new messages from the server
-socket.on('group messages', (data) => {
-  console.log({ data });
-  receiveMessage(
-    messages,
-    { username: data.username, id: data.id },
-    data.message
-  );
+socket.on('listening messages', (data) => {
+  if (
+    userNameMessage.innerHTML === data.activedChat &&
+    data.sender === socket.username
+  ) {
+    receiveMessage(
+      messages,
+      { username: data.sender, id: data.senderId },
+      data.content
+    );
+  }
+});
+
+// Get messages of the current chat from the server
+socket.on('get messages', (messagesData) => {
+  if (messages.childNodes.length <= 0) {
+    messagesData?.forEach((data) => {
+      receiveMessage(
+        messages,
+        { username: data.sender, id: data.senderId },
+        data.content
+      );
+    });
+  }
 });
 
 let isGroupCreated = false;
+let chatMode = 'group'; // 'group' or 'private'
 
 // Get users when we had a new connection
-socket.on('user connected', (users) => {
-  users.forEach((user) => {
-    if (users.length >= 1) {
-      const usersContected = document.querySelectorAll(
-        '.userConnectedContainer'
-      );
-      console.log({ usersContected });
-    }
+socket.on('user connected', ({ newUser, users }) => {
+  /* const userConnected = document.querySelectorAll('.userConnected'); */
+  const userConnected = Array.from(
+    document.querySelectorAll('.userConnected')
+  ).map((element) => element.innerText);
 
-    if (!isGroupCreated) {
-      if (users.length > 0) {
-        createChatButton('Group Messages');
-        isGroupCreated = true;
-      }
-    }
+  if (!isGroupCreated && users.length > 0) {
+    createChatButton('Group Messages', null);
+    isGroupCreated = true;
+  }
 
-    createChatButton(user.username);
+  // Filtrar usuarios que aún no han sido desplegados
+  const newUsers = users.filter((user) => {
+    return (
+      user.username !== socket.username &&
+      !userConnected.includes(user.username)
+    );
+  });
+
+  newUsers.forEach((user) => {
+    createChatButton(user.username, user.id);
   });
 });
-
-function createChatButton(name) {
-  const container = createElementWithClass(
-    'button',
-    'userConnectedContainer'
-  );
-  const userId = createElementWithClass('p', 'userConnected');
-  const status = createElementWithClass('p', 'userConnectedStatus');
-
-  userId.append(name);
-  status.append('Online');
-
-  container.onclick = () => {
-    //createPrivateChat(user);
-    console.log({ name });
-  };
-
-  container.appendChild(userId);
-  container.appendChild(status);
-  chats.appendChild(container);
-}
 
 // Get the user disconnected
 socket.on('user disconnected', (user) => {
@@ -107,7 +126,6 @@ socket.on('user disconnected', (user) => {
   );
 
   userContainer.forEach((ele) => {
-    console.log({ child: ele.childNodes });
     if (ele.childNodes[0].innerText === user) {
       alert(`${user} had been desconnected`);
       ele.remove();
@@ -119,12 +137,27 @@ socket.on('user disconnected', (user) => {
 form.addEventListener('submit', (e) => {
   e.preventDefault();
 
+  console.log(
+    'Sera que entra en el form cuando envio mensajes privados'
+  );
   if (messagesInput.value) {
-    socket.emit('group message', {
-      chatType: 'group',
-      username: socket.username,
-      message: messagesInput.value,
-    });
+    if (userNameMessage.innerHTML === 'Group Messages') {
+      socket.emit('listening messages', {
+        chatType: 'group',
+        senderId: socket.id,
+        sender: socket.username,
+        content: messagesInput.value,
+        chatWith: 'Group Messages',
+      });
+    } else {
+      socket.emit('listening messages', {
+        chatType: 'private',
+        senderId: socket.id,
+        sender: socket.username,
+        content: messagesInput.value,
+        chatWith: userNameMessage.innerHTML,
+      });
+    }
     messagesInput.value = '';
   }
 });
@@ -138,7 +171,6 @@ function receiveMessage(msgContainer, user, msg) {
   userProfile.textContent = user.username[0].toUpperCase();
   message.textContent = msg;
 
-  console.log('User from message: ', user);
   if (socket.id === user.id) {
     item.style.justifyContent = 'flex-end';
     userProfile.style.order = 2;
@@ -146,6 +178,8 @@ function receiveMessage(msgContainer, user, msg) {
 
   item.appendChild(userProfile);
   item.appendChild(message);
+
+  console.log({ item });
 
   msgContainer.appendChild(item);
 }
@@ -161,13 +195,51 @@ function createElementWithClass(element, className = '') {
   return ele;
 }
 
-function createPrivateChat(user) {
-  const userNameMessage = document.querySelector('.userNameMessage');
-  const userProfileMessage = document.querySelector(
-    '.userProfileMessage'
+function createChatButton(name, id) {
+  const container = createElementWithClass(
+    'button',
+    'userConnectedContainer'
   );
+  const userId = createElementWithClass('p', 'userConnected');
+  const status = createElementWithClass('p', 'userConnectedStatus');
 
-  if (!usersTalkingPrivalety[user.id]) {
-    usersTalkingPrivalety[user.id] = user.username;
-  }
+  userId.append(name);
+  status.append('Online');
+
+  container.onclick = () => {
+    if (userNameMessage.innerHTML !== name) {
+      openChat({ username: name, id: id });
+    }
+  };
+
+  container.appendChild(userId);
+  container.appendChild(status);
+  chats.appendChild(container);
 }
+
+function openChat(recipient) {
+  if (messages.childNodes.length > 0) {
+    while (messages.firstChild) {
+      messages.removeChild(messages.firstChild);
+    }
+  }
+
+  if (!usersTalkingPrivalety[recipient.id]) {
+    usersTalkingPrivalety[recipient.id] = recipient.username;
+  }
+
+  userNameMessage.innerHTML = recipient.username;
+
+  socket.emit('get messages', {
+    sender: socket.username,
+    recipient: recipient.username,
+  });
+}
+
+/* 
+Each item in the sidebar will have an onClick function
+- 1st item in the side bar = group messages. onClick will be a function like renderGroupMessages()
+- private messages will be renderPrivateChat('user') which will get messages from server. maybe a loading message in between.
+
+
+*/
