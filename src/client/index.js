@@ -125,23 +125,6 @@ socket.on('get_message', (data) => {
 socket.on(
   'new_init_chat',
   ({ chatType, senderActivedID, senderActived, chat }) => {
-    /* if (userNameMessage.innerHTML === 'Group Messages') {
-      if (chatType === 'group') {
-        if (messages.childNodes.length <= 0) {
-          chat?.forEach((data) => {
-            receiveMessage(
-              messages,
-              { username: data.sender, id: data.senderId },
-              data.content
-            );
-          });
-        }
-      }
-      return;
-    }
-
-    if (chatType === 'group') return; */
-
     if (messages.childNodes.length <= 0) {
       chat?.forEach((data) => {
         receiveMessage(
@@ -208,7 +191,6 @@ form.addEventListener('submit', (e) => {
         chatWith: 'Group Messages',
       });
     } else {
-      console.log('Send Messages Private');
       socket.emit('usend_message', {
         chatType: 'private',
         senderId: socket.id,

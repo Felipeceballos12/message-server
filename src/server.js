@@ -112,7 +112,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('usend_message', (data) => {
-    console.log({ data });
     if (data.chatType === 'group') {
       groupChat.push({
         senderId: data.senderId,
@@ -138,11 +137,7 @@ io.on('connection', (socket) => {
 
   socket.on('change_chat', (data) => {
     if (data.chat !== 'Group Messages') {
-      let privateMessages = privateChat.getConversation(
-        data.sender,
-        data.recipient
-      );
-
+      let privateMessages = privateChat.getConversation(data.sender, data.chat);
       if (privateMessages !== null) {
         io.emit('new_init_chat', {
           chatType: 'private',
