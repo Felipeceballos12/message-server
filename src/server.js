@@ -20,10 +20,7 @@ const privateChat = {
   conversations: {},
 
   addMessage: function (sender, recipient, message) {
-    const conversationId = this.getConversationId(
-      sender.username,
-      recipient
-    );
+    const conversationId = this.getConversationId(sender.username, recipient);
 
     if (!this.conversations[conversationId]) {
       this.conversations[conversationId] = {
@@ -90,7 +87,6 @@ io.on('connection', (socket) => {
       id: socket.id,
     };
 
-    console.log({ users });
     io.emit('user connected', { newUser, users });
   });
 
@@ -103,15 +99,20 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('user disconnected', socket.username);
   });
 
-  socket.on('user typing', (user) => {
-    socket.broadcast.emit('user typing', user);
+  socket.on('user_typing', (data) => {
+    socket.broadcast.emit('sender_typing', {
+      chatType: data.chatInfo.type,
+      chatActivedName: data.chatInfo.activedChat,
+      sendername: data.sendername,
+    });
   });
 
-  socket.on('user not typing', (user) => {
-    socket.broadcast.emit('user not typing', user);
+  socket.on('user_not_typing', (user) => {
+    socket.broadcast.emit('sender_not_typing', user);
   });
 
-  socket.on('listening messages', (data) => {
+  socket.on('usend_message', (data) => {
+    console.log({ data });
     if (data.chatType === 'group') {
       groupChat.push({
         senderId: data.senderId,
@@ -126,44 +127,88 @@ io.on('connection', (socket) => {
       );
     }
 
-    io.emit('listening messages', {
+    io.emit('get_message', {
       senderId: socket.id,
       content: data.content,
       sender: socket.username,
       activedChat: data.chatWith,
+      chatType: data.chatType,
     });
   });
 
-  socket.on('get messages', (data) => {
-    if (data.recipient !== 'Group Messages') {
+  socket.on('change_chat', (data) => {
+    if (data.chat !== 'Group Messages') {
       let privateMessages = privateChat.getConversation(
         data.sender,
         data.recipient
       );
 
       if (privateMessages !== null) {
-        console.log('Messages: ', privateMessages);
-        io.emit('get messages', privateMessages.messages);
+        io.emit('new_init_chat', {
+          chatType: 'private',
+          senderActivedID: data.senderActivedID,
+          senderActived: data.sender,
+          chat: privateMessages.messages,
+        });
       }
     } else {
-      io.emit('get messages', groupChat);
+      io.emit('new_init_chat', {
+        chatType: 'group',
+        senderActivedID: data.senderID,
+        senderActived: data.sender,
+        chat: groupChat,
+      });
     }
   });
 });
 
 const groupNameSpace = io.of('/privateGroup');
-let privateGroupChat = {};
+/* let privateGroupChat = {}; */
 
 groupNameSpace.on('connection', (socket) => {
-  console.log('Group Private');
-  socket.on('user connected', (user) => {
-    if (!privateGroupChat[socket.id]) {
-      privateGroupChat[socket.id] = [user];
-    } else {
-      privateGroupChat[socket.id].push(user);
+  socket.on('user connected', (data) => {
+    socket.join(data.groupId);
+    socket.username = data.userInfo.username;
+    socket.groupID = data.groupId;
+
+    if (!groupNameSpace.adapter.rooms.get(data.groupId).users) {
+      groupNameSpace.adapter.rooms.get(data.groupId).users = {};
     }
 
-    console.log(privateGroupChat);
+    groupNameSpace.adapter.rooms.get(data.groupId).users[socket.id] =
+      data.userInfo.username;
+
+    socket.to(data.groupId).emit('new user', data.userInfo.username);
+    groupNameSpace
+      .to(data.groupId)
+      .emit('get users', groupNameSpace.adapter.rooms.get(data.groupId).users);
+  });
+
+  socket.on('disconnect', () => {
+    socket.to(socket.groupID).emit('user disconnect', socket.username);
+
+    if (groupNameSpace.adapter.rooms.get(socket.groupID)) {
+      delete groupNameSpace.adapter.rooms.get(socket.groupID).users[socket.id];
+
+      socket
+        .to(socket.groupID)
+        .emit(
+          'get users',
+          groupNameSpace.adapter.rooms.get(socket.groupID).users
+        );
+    }
+  });
+
+  socket.on('listening messages', (data) => {
+    groupNameSpace.to(socket.groupID).emit('listening messages', data);
+  });
+
+  socket.on('user typing', (user) => {
+    socket.to(socket.groupID).emit('user typing', user);
+  });
+
+  socket.on('user not typing', (user) => {
+    socket.to(socket.groupID).emit('user not typing', user);
   });
 });
 

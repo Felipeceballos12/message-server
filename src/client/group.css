@@ -24,12 +24,21 @@ main {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
   gap: 16px;
   padding: 16px 32px;
   background-color: #ffff;
   border-bottom: 2px solid #f8f9fa;
   border-top: 2px solid #f8f9fa;
   grid-row: 1 / 2;
+}
+
+.headerMessageSubContainer {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 16px;
 }
 
 .userProfileMessage {
@@ -60,6 +69,22 @@ main {
   font-weight: 300;
   font-style: normal;
   color: #4c5461;
+}
+
+.leaveGroupContainer {
+  display: grid;
+  place-content: center;
+  align-self: flex-end;
+  height: 100%;
+}
+
+.leaveGroup {
+  display: grid;
+  place-content: center;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  background-color: transparent;
 }
 
 .bodyMessage {
@@ -102,6 +127,15 @@ h6 {
   cursor: pointer;
   background-color: transparent;
 }
+.messageIn {
+  max-width: 500px;
+  width: fit-content;
+  height: auto;
+  background-color: #f6f7f9;
+  word-break: break-all;
+  white-space: pre-wrap;
+  padding: 8px 16px;
+}
 
 ul {
   padding: 16px 51px;
@@ -119,6 +153,19 @@ li {
   font-weight: 300;
   font-style: normal;
   margin-bottom: 16px;
+}
+
+.messageInProfile {
+  display: grid;
+  place-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 100%;
+  background-color: #96dd8b;
+  color: #f8f9fa;
+  font-size: 14px;
+  font-weight: 400;
+  font-style: normal;
 }
 
 .typing {

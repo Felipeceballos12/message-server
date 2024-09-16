@@ -3,13 +3,9 @@ const form = document.querySelector('#form');
 const messagesInput = document.querySelector('#input');
 const messages = document.querySelector('#messages');
 const chats = document.querySelector('.chatsContainer');
-const userProfileMessage = document.querySelector(
-  '.userProfileMessage'
-);
+const userProfileMessage = document.querySelector('.userProfileMessage');
 const userNameMessage = document.querySelector('.userNameMessage');
-const createGroupButton = document.querySelector(
-  '.createGroupButton'
-);
+const createGroupButton = document.querySelector('.createGroupButton');
 
 const usersTalkingPrivalety = {};
 
@@ -28,7 +24,6 @@ if (socket.username !== null) {
 
 // Listening when the user is clicked on the create group
 createGroupButton.addEventListener('click', () => {
-  console.log('Group Button');
   const groupName = prompt('What is the name of the group');
 
   if (groupName !== null) {
@@ -39,25 +34,55 @@ createGroupButton.addEventListener('click', () => {
 });
 
 // Listening when the user is typing to send to the server
-messagesInput.addEventListener('input', (e) => {
-  socket.emit('user typing', socket.username);
+messagesInput.addEventListener('input', () => {
+  const chatType =
+    userNameMessage.innerHTML !== 'Group Messages' ? 'private' : 'group';
+  const activedChat =
+    userNameMessage.innerHTML !== 'Group Messages'
+      ? userNameMessage.innerHTML
+      : 'Group Messages';
+
+  socket.emit('user_typing', {
+    chatInfo: {
+      type: chatType,
+      activedChat,
+    },
+    sendername: socket.username,
+  });
 });
 
 // Listening when user stop typing to send to the server
 messagesInput.addEventListener('change', () => {
-  socket.emit('user not typing', socket.username);
+  socket.emit('user_not_typing', socket.username);
 });
 
 // Get when the user is typing from the server
-socket.on('user typing', (user) => {
+socket.on('sender_typing', (data) => {
   const typing = document.querySelector('.typing');
-  typing.classList = 'typing typing-active';
-  typing.style.display = 'block';
-  typing.innerText = `${user} is typing ....`;
+
+  if (userNameMessage.innerHTML === 'Group Messages') {
+    if (data.chatType === 'group') {
+      typing.classList = 'typing typing-active';
+      typing.style.display = 'block';
+      typing.innerText = `${data.sendername} is typing ....`;
+    }
+    return;
+  }
+
+  if (data.chatType === 'group') return;
+
+  if (
+    data.chatActivedName === socket.username &&
+    data.sendername === userNameMessage.innerHTML
+  ) {
+    typing.classList = 'typing typing-active';
+    typing.style.display = 'block';
+    typing.innerText = `${data.sendername} is typing ....`;
+  }
 });
 
 // Get whe the user isn't typing from the server
-socket.on('user not typing', (user) => {
+socket.on('sender_not_typing', (user) => {
   const typing = document.querySelector('.typing');
   typing.classList = 'typing typing-not-active';
   typing.style.display = 'none';
@@ -65,10 +90,28 @@ socket.on('user not typing', (user) => {
 });
 
 // Get new messages from the server
-socket.on('listening messages', (data) => {
+socket.on('get_message', (data) => {
+  if (userNameMessage.innerHTML === 'Group Messages') {
+    if (data.chatType === 'group') {
+      receiveMessage(
+        messages,
+        { username: data.sender, id: data.senderId },
+        data.content
+      );
+    }
+    return;
+  }
+
+  if (data.chatType === 'group') return;
+
+  const isCurrentUserSender = socket.username === data.sender;
+  const isCurrentUserReceiver = socket.username === data.activedChat;
+  const isSenderActive = userNameMessage.innerHTML === data.sender;
+  const isActiveChatOpen = userNameMessage.innerHTML === data.activedChat;
+
   if (
-    userNameMessage.innerHTML === data.activedChat &&
-    data.sender === socket.username
+    (isCurrentUserSender && isActiveChatOpen) ||
+    (isCurrentUserReceiver && isSenderActive)
   ) {
     receiveMessage(
       messages,
@@ -79,17 +122,37 @@ socket.on('listening messages', (data) => {
 });
 
 // Get messages of the current chat from the server
-socket.on('get messages', (messagesData) => {
-  if (messages.childNodes.length <= 0) {
-    messagesData?.forEach((data) => {
-      receiveMessage(
-        messages,
-        { username: data.sender, id: data.senderId },
-        data.content
-      );
-    });
+socket.on(
+  'new_init_chat',
+  ({ chatType, senderActivedID, senderActived, chat }) => {
+    /* if (userNameMessage.innerHTML === 'Group Messages') {
+      if (chatType === 'group') {
+        if (messages.childNodes.length <= 0) {
+          chat?.forEach((data) => {
+            receiveMessage(
+              messages,
+              { username: data.sender, id: data.senderId },
+              data.content
+            );
+          });
+        }
+      }
+      return;
+    }
+
+    if (chatType === 'group') return; */
+
+    if (messages.childNodes.length <= 0) {
+      chat?.forEach((data) => {
+        receiveMessage(
+          messages,
+          { username: data.sender, id: data.senderId },
+          data.content
+        );
+      });
+    }
   }
-});
+);
 
 let isGroupCreated = false;
 let chatMode = 'group'; // 'group' or 'private'
@@ -121,9 +184,7 @@ socket.on('user connected', ({ newUser, users }) => {
 
 // Get the user disconnected
 socket.on('user disconnected', (user) => {
-  const userContainer = document.querySelectorAll(
-    '.userConnectedContainer'
-  );
+  const userContainer = document.querySelectorAll('.userConnectedContainer');
 
   userContainer.forEach((ele) => {
     if (ele.childNodes[0].innerText === user) {
@@ -137,12 +198,9 @@ socket.on('user disconnected', (user) => {
 form.addEventListener('submit', (e) => {
   e.preventDefault();
 
-  console.log(
-    'Sera que entra en el form cuando envio mensajes privados'
-  );
   if (messagesInput.value) {
     if (userNameMessage.innerHTML === 'Group Messages') {
-      socket.emit('listening messages', {
+      socket.emit('usend_message', {
         chatType: 'group',
         senderId: socket.id,
         sender: socket.username,
@@ -150,7 +208,8 @@ form.addEventListener('submit', (e) => {
         chatWith: 'Group Messages',
       });
     } else {
-      socket.emit('listening messages', {
+      console.log('Send Messages Private');
+      socket.emit('usend_message', {
         chatType: 'private',
         senderId: socket.id,
         sender: socket.username,
@@ -179,8 +238,6 @@ function receiveMessage(msgContainer, user, msg) {
   item.appendChild(userProfile);
   item.appendChild(message);
 
-  console.log({ item });
-
   msgContainer.appendChild(item);
 }
 
@@ -196,10 +253,7 @@ function createElementWithClass(element, className = '') {
 }
 
 function createChatButton(name, id) {
-  const container = createElementWithClass(
-    'button',
-    'userConnectedContainer'
-  );
+  const container = createElementWithClass('button', 'userConnectedContainer');
   const userId = createElementWithClass('p', 'userConnected');
   const status = createElementWithClass('p', 'userConnectedStatus');
 
@@ -230,9 +284,10 @@ function openChat(recipient) {
 
   userNameMessage.innerHTML = recipient.username;
 
-  socket.emit('get messages', {
+  socket.emit('change_chat', {
+    senderID: socket.id,
     sender: socket.username,
-    recipient: recipient.username,
+    chat: recipient.username,
   });
 }
 
